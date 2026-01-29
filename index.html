@@ -87,6 +87,23 @@ document.getElementById("input").addEventListener("keypress", e => {
   if (e.key === "Enter") search();
 });
 
+/* ===== テキスト正規化関数 ===== */
+function normalizeText(str) {
+  if (!str) return "";
+  str = str.toLowerCase();       // アルファベット大文字小文字無視
+  str = str.normalize("NFKC");   // 全角半角統一
+  str = str.replace(/[ー－]/g, "ー"); // 長音符統一
+  str = hiraToKana(str);         // ひらがな→カタカナ変換
+  return str;
+}
+
+/* ===== ひらがな→カタカナ変換 ===== */
+function hiraToKana(str) {
+  return str.replace(/[\u3041-\u3096]/g, ch =>
+    String.fromCharCode(ch.charCodeAt(0) + 0x60)
+  );
+}
+
 /* ===== あいまい + AND + 簡単検索 ===== */
 function search() {
   const input = document.getElementById("input").value.trim();
@@ -97,25 +114,18 @@ function search() {
     return;
   }
 
-  const words = input.split(/\s+/);
+  const words = input.split(/\s+/).map(normalizeText); // 検索語も正規化
 
   const hits = data.filter(d => {
-    const text = (
-      d.category +
-      d.question +
-      d.answer +
-      (d.follow_up || "")
-    ).toLowerCase();
+    const text = normalizeText(
+      d.category + d.question + d.answer + (d.follow_up || "")
+    );
 
-    // 1語 → あいまい検索
     if (words.length === 1) {
-      return text.includes(words[0].toLowerCase());
+      return text.includes(words[0]);
     }
 
-    // 複数語 → AND検索
-    return words.every(w =>
-      text.includes(w.toLowerCase())
-    );
+    return words.every(w => text.includes(w));
   });
 
   if (hits.length === 0) {
@@ -123,6 +133,19 @@ function search() {
       "<p>該当するFAQが見つかりませんでした。<br>別のキーワードをお試しください。</p>";
     return;
   }
+
+  list.innerHTML = hits.map(d => `
+    <div class="card">
+      <div class="q">Q. ${d.question}</div>
+      <div>A. ${d.answer}</div>
+      ${d.follow_up ? `<div class="follow">💡 ${d.follow_up}</div>` : ""}
+    </div>
+  `).join("");
+}
+</script>
+
+</body>
+</html>
 
   list.innerHTML = hits.map(d => `
     <div class="card">
