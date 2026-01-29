@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>プリンター FAQ</title>
+<title>EPSON プリンター FAQ</title>
 
 <!-- kuroshiro と解析器 -->
 <script src="https://unpkg.com/kuroshiro/dist/kuroshiro.min.js"></script>
@@ -29,7 +29,6 @@ button { width:100%; margin-top:10px; padding:14px; font-size:16px; border:none;
 <script>
 const CSV_URL = "https://docs.google.com/spreadsheets/d/1sq7O054J_6oiP-fkfCP5VCBjlgrjLMT9aXSev1ne6UE/gviz/tq?tqx=out:csv";
 let data = [];
-let dataHira = []; // ひらがな化キャッシュ
 
 // kuroshiro初期化
 let kuro;
@@ -37,56 +36,62 @@ async function initKuro() {
   kuro = new Kuroshiro();
   await kuro.init(new KuroshiroAnalyzerKuromoji());
 }
-await initKuro();
+initKuro();
+
+// CSV読み込み
+fetch(CSV_URL)
+  .then(res => res.text())
+  .then(text => {
+    const lines = text.trim().split("\n").slice(1);
+    data = lines.map(line => {
+      const cols = line.split(",").map(c => c.replace(/^"|"$/g,""));
+      const [category, question, answer, follow_up] = cols;
+      return { category, question, answer, follow_up };
+    });
+  });
+
+document.getElementById("searchBtn").addEventListener("click", search);
+document.getElementById("input").addEventListener("keypress", e => { if(e.key==="Enter") search(); });
 
 // 全角半角・大文字小文字統一
 function normalizeLatin(str) {
   return str.toLowerCase().normalize("NFKC").replace(/[ー－]/g,"ー");
 }
 
-// 文字変換（ひらがな・漢字→ひらがな）
+// 文字変換（ひらがな・カタカナ・漢字→ひらがな）
 async function convertToHira(str) {
   if(!str) return "";
-  const tmp = normalizeLatin(str);
+  // 1) Latin normalization
+  let tmp = normalizeLatin(str);
+  // 2) Kuroshiro でひらがな化
   try {
-    const hira = await kuro.convert(tmp, { to: "hiragana", mode: "normal" });
-    return hira.replace(/\s+/g,"");
-  } catch(e) {
+    tmp = await kuro.convert(tmp, { to: "hiragana", mode: "spaced" });
+  } catch (e) {
     console.warn("変換エラー", e);
-    return tmp;
   }
+  // 全スペース削除して戻す
+  return tmp.replace(/\s+/g,"");
 }
 
-// CSV読み込み + ひらがな化キャッシュ
-async function loadData() {
-  const res = await fetch(CSV_URL);
-  const text = await res.text();
-  const lines = text.trim().split("\n").slice(1);
-  for(const line of lines){
-    const cols = line.split(",").map(c => c.replace(/^"|"$/g,""));
-    const [category, question, answer, follow_up] = cols;
-    const obj = { category, question, answer, follow_up };
-    const fullText = category + question + answer + (follow_up||"");
-    obj.hiraText = await convertToHira(fullText); // 事前ひらがな化
-    data.push(obj);
-  }
-}
-await loadData();
-
-document.getElementById("searchBtn").addEventListener("click", search);
-document.getElementById("input").addEventListener("keypress", e => { if(e.key==="Enter") search(); });
-
-// 検索
 async function search() {
   const input = document.getElementById("input").value.trim();
   const list = document.getElementById("list");
   if(!input) { list.innerHTML=""; return; }
 
-  const words = (await convertToHira(input)).split(/\s+/);
+  // 検索語もひらがな化
+  const normWords = (await convertToHira(input)).split(/\s+/);
 
-  const hits = data.filter(d => words.every(w => d.hiraText.includes(w)));
+  const hits = [];
+  for(const d of data) {
+    // 全文をひらがな化
+    const text = await convertToHira(d.category + d.question + d.answer + (d.follow_up||""));
+    // AND検索
+    if(normWords.every(w => text.includes(w))) {
+      hits.push(d);
+    }
+  }
 
-  if(hits.length===0){
+  if(hits.length===0) {
     list.innerHTML="<p>該当するFAQが見つかりませんでした。<br>別のキーワードをお試しください。</p>";
     return;
   }
