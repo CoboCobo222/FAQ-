@@ -45,7 +45,10 @@ let data = [];
 let kuro;
 
 // ==== Kuroshiro 初期化 ====
-async function initKuro() { kuro = new Kuroshiro(); await kuro.init(new KuroshiroAnalyzerKuromoji()); }
+async function initKuro() { 
+  kuro = new Kuroshiro(); 
+  await kuro.init(new KuroshiroAnalyzerKuromoji()); 
+}
 initKuro();
 
 // ==== CSV 読み込み ====
@@ -58,14 +61,13 @@ fetch(CSV_URL).then(r=>r.text()).then(text=>{
   });
 });
 
-function normalizeLatin(str){ return str.toLowerCase().normalize("NFKC").replace(/[ー－]/g,"ー"); }
-
-async function convertToHira(str){
+// ==== 正規化関数 ====
+async function normalize(str){
   if(!str) return "";
-  let tmp = normalizeLatin(str);
-  try{ tmp = await kuro.convert(tmp,{to:"hiragana", mode:"spaced"}); }
+  let tmp = str.toLowerCase().normalize("NFKC").replace(/[ー－]/g,"ー");
+  try { tmp = await kuro.convert(tmp, {to:"hiragana", mode:"normal"}); } 
   catch(e){ console.warn("変換エラー", e); }
-  return tmp.replace(/\s+/g,"");
+  return tmp;
 }
 
 // ==== 検索 & チャット表示 ====
@@ -81,12 +83,12 @@ async function search(){
   userDiv.innerHTML=`<div>${question}</div>`;
   chatEl.appendChild(userDiv);
 
-  // --- 検索 ---
-  const normWords = (await convertToHira(question)).split(/\s+/);
+  // --- 正規化検索 ---
+  const normQuestion = await normalize(question);
   const hits = [];
   for(const d of data){
-    const text = await convertToHira(d.category + d.question + d.answer); // follow_up 無視
-    if(normWords.every(w=>text.includes(w))) hits.push(d);
+    const text = await normalize(d.category + d.question + d.answer); // follow_up 無視
+    if(text.includes(normQuestion)) hits.push(d);
   }
 
   // --- Bot吹き出し ---
@@ -124,8 +126,8 @@ async function search(){
 
 document.getElementById("sendBtn").addEventListener("click", search);
 document.getElementById("input").addEventListener("keypress", e=>{ if(e.key==="Enter") search(); });
-
 </script>
 
 </body>
 </html>
+
