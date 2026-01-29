@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>プリンター FAQ</title>
+<title>EPSON プリンター FAQ</title>
 
 <style>
 body {
@@ -35,6 +35,7 @@ button {
   border: none;
   background: #007bff;
   color: #fff;
+  font-size: 16px;
 }
 
 .card {
@@ -61,7 +62,7 @@ button {
 
 <h3>プリンター FAQ</h3>
 
-<input id="input" placeholder="例：印刷">
+<input id="input" placeholder="例：印刷 できない / スマホ 印刷">
 <button id="searchBtn">検索</button>
 
 <div id="list"></div>
@@ -72,7 +73,9 @@ const CSV_URL =
 
 let data = [];
 
-// CSV 読み込み
+/* =====================
+   CSV 読み込み
+===================== */
 fetch(CSV_URL)
   .then(res => res.text())
   .then(text => {
@@ -82,34 +85,43 @@ fetch(CSV_URL)
       const cols = line.split(",").map(c =>
         c.replace(/^"|"$/g, "")
       );
-
       const [category, question, answer, follow_up] = cols;
       return { category, question, answer, follow_up };
     });
   });
 
-// 検索処理
 document.getElementById("searchBtn").addEventListener("click", search);
 document.getElementById("input").addEventListener("keypress", e => {
   if (e.key === "Enter") search();
 });
 
+/* =====================
+   あいまい + AND検索
+===================== */
 function search() {
-  const word = document.getElementById("input").value.trim();
+  const input = document.getElementById("input").value.trim();
   const list = document.getElementById("list");
 
-  if (!word) {
+  if (!input) {
     list.innerHTML = "";
     return;
   }
 
-  const hits = data.filter(d =>
-    d.question.includes(word) ||
-    d.answer.includes(word)
-  );
+  // AND検索用：スペース区切り
+  const words = input.split(/\s+/);
+
+  const hits = data.filter(d => {
+    const text = (d.question + d.answer).toLowerCase();
+
+    // AND条件：すべて含まれていればOK
+    return words.every(word =>
+      text.includes(word.toLowerCase())
+    );
+  });
 
   if (hits.length === 0) {
-    list.innerHTML = "<p>該当するFAQが見つかりませんでした。</p>";
+    list.innerHTML =
+      "<p>該当するFAQが見つかりませんでした。<br>別のキーワードをお試しください。</p>";
     return;
   }
 
