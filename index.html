@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EPSON FAQ ChatBot（単語ヒット対応版）</title>
+<title>EPSON FAQ ChatBot（単語部分一致版）</title>
 
 <script src="https://unpkg.com/kuroshiro/dist/kuroshiro.min.js"></script>
 <script src="https://unpkg.com/kuroshiro-analyzer-kuromoji/dist/kuroshiro-analyzer-kuromoji.min.js"></script>
@@ -30,10 +30,10 @@ h3 { text-align:center; margin-bottom:12px; }
 </head>
 <body>
 
-<h3>プリンタ FAQ ChatBot</h3>
+<h3>プリンター FAQ ChatBot</h3>
 
 <div id="inputArea">
-  <input id="input" placeholder="質問を入力してください…">
+  <input id="input" placeholder="調べたい単語をいれてください…">
   <button id="sendBtn">送信</button>
 </div>
 
@@ -67,7 +67,14 @@ async function normalize(str){
   let tmp = str.toLowerCase().normalize("NFKC").replace(/[ー－]/g,"ー");
   try { tmp = await kuro.convert(tmp, {to:"hiragana", mode:"normal"}); } 
   catch(e){ console.warn("変換エラー", e); }
-  return tmp.replace(/\s+/g,""); // スペース削除
+  return tmp;
+}
+
+// ==== 文章を単語に分解 ====
+async function getWords(str){
+  const hira = await normalize(str);
+  // ひらがな・カタカナ・アルファベット・数字の連続を単語として抽出
+  return hira.match(/[\u3040-\u309F\u30A0-\u30FFA-Za-z0-9]+/g) || [];
 }
 
 // ==== 検索 & チャット表示 ====
@@ -83,14 +90,15 @@ async function search(){
   userDiv.innerHTML=`<div>${question}</div>`;
   chatEl.appendChild(userDiv);
 
-  // --- 正規化して単語に分割 ---
-  const normWords = (await normalize(question)).split(/\s+/);
+  // --- 入力を単語に分解 ---
+  const inputWords = await getWords(question);
 
-  // --- CSV を検索（単語ごと部分一致） ---
+  // --- CSVを検索（単語部分一致） ---
   const hits = [];
   for(const d of data){
-    const text = await normalize(d.category + d.question + d.answer); // follow_up 無視
-    if(normWords.some(w => text.includes(w))) hits.push(d); // どれか1単語でもヒット
+    const textWords = await getWords(d.category + d.question + d.answer);
+    // 入力の単語がCSV内のどの単語にも含まれていればヒット
+    if(inputWords.some(iw => textWords.some(tw => tw.includes(iw)))) hits.push(d);
   }
 
   // --- Bot吹き出し ---
@@ -132,5 +140,4 @@ document.getElementById("input").addEventListener("keypress", e=>{ if(e.key==="E
 
 </body>
 </html>
-
 
