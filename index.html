@@ -13,9 +13,7 @@ body {
   background: #fff;
 }
 
-h3 {
-  margin-bottom: 12px;
-}
+h3 { margin-bottom: 12px; }
 
 input {
   width: 100%;
@@ -35,7 +33,6 @@ button {
   border: none;
   background: #007bff;
   color: #fff;
-  font-size: 16px;
 }
 
 .card {
@@ -45,10 +42,7 @@ button {
   margin-top: 12px;
 }
 
-.q {
-  font-weight: bold;
-  margin-bottom: 6px;
-}
+.q { font-weight: bold; margin-bottom: 6px; }
 
 .follow {
   margin-top: 8px;
@@ -62,7 +56,7 @@ button {
 
 <h3>プリンター FAQ</h3>
 
-<input id="input" placeholder="例：印刷 できない / スマホ 印刷">
+<input id="input" placeholder="例：簡単検索 / スマホ 印刷 / 印刷 できない">
 <button id="searchBtn">検索</button>
 
 <div id="list"></div>
@@ -73,9 +67,7 @@ const CSV_URL =
 
 let data = [];
 
-/* =====================
-   CSV 読み込み
-===================== */
+/* ===== CSV 読み込み ===== */
 fetch(CSV_URL)
   .then(res => res.text())
   .then(text => {
@@ -95,9 +87,7 @@ document.getElementById("input").addEventListener("keypress", e => {
   if (e.key === "Enter") search();
 });
 
-/* =====================
-   あいまい + AND検索
-===================== */
+/* ===== あいまい + AND + 簡単検索 ===== */
 function search() {
   const input = document.getElementById("input").value.trim();
   const list = document.getElementById("list");
@@ -107,15 +97,24 @@ function search() {
     return;
   }
 
-  // AND検索用：スペース区切り
   const words = input.split(/\s+/);
 
   const hits = data.filter(d => {
-    const text = (d.question + d.answer).toLowerCase();
+    const text = (
+      d.category +
+      d.question +
+      d.answer +
+      (d.follow_up || "")
+    ).toLowerCase();
 
-    // AND条件：すべて含まれていればOK
-    return words.every(word =>
-      text.includes(word.toLowerCase())
+    // 1語 → あいまい検索
+    if (words.length === 1) {
+      return text.includes(words[0].toLowerCase());
+    }
+
+    // 複数語 → AND検索
+    return words.every(w =>
+      text.includes(w.toLowerCase())
     );
   });
 
@@ -137,4 +136,3 @@ function search() {
 
 </body>
 </html>
-
