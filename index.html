@@ -5,149 +5,104 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EPSON プリンター FAQ</title>
 
+<!-- kuroshiro と解析器 -->
+<script src="https://unpkg.com/kuroshiro/dist/kuroshiro.min.js"></script>
+<script src="https://unpkg.com/kuroshiro-analyzer-kuromoji/dist/kuroshiro-analyzer-kuromoji.min.js"></script>
+
 <style>
-body {
-  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-  margin: 0;
-  padding: 16px;
-  background: #fff;
-}
-
-h3 { margin-bottom: 12px; }
-
-input {
-  width: 100%;
-  padding: 14px;
-  font-size: 16px;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  box-sizing: border-box;
-}
-
-button {
-  width: 100%;
-  margin-top: 10px;
-  padding: 14px;
-  font-size: 16px;
-  border-radius: 8px;
-  border: none;
-  background: #007bff;
-  color: #fff;
-}
-
-.card {
-  background: #f7f7f7;
-  padding: 12px;
-  border-radius: 8px;
-  margin-top: 12px;
-}
-
-.q { font-weight: bold; margin-bottom: 6px; }
-
-.follow {
-  margin-top: 8px;
-  font-size: 14px;
-  color: #555;
-}
+body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin:0; padding:16px; background:#fff; }
+h3 { margin-bottom:12px; }
+input { width:100%; padding:14px; font-size:16px; border-radius:8px; border:1px solid #ccc; box-sizing:border-box; }
+button { width:100%; margin-top:10px; padding:14px; font-size:16px; border:none; border-radius:8px; background:#007bff; color:#fff; }
+.card { background:#f7f7f7; padding:12px; border-radius:8px; margin-top:12px; }
+.q { font-weight:bold; margin-bottom:6px; }
+.follow { margin-top:8px; font-size:14px; color:#555; }
 </style>
 </head>
-
 <body>
 
 <h3>プリンター FAQ</h3>
-
 <input id="input" placeholder="例：Wi-Fi / スマホ 印刷 / 印刷 できない">
 <button id="searchBtn">検索</button>
-
 <div id="list"></div>
 
 <script>
-const CSV_URL =
-"https://docs.google.com/spreadsheets/d/1sq7O054J_6oiP-fkfCP5VCBjlgrjLMT9aXSev1ne6UE/gviz/tq?tqx=out:csv";
-
+const CSV_URL = "https://docs.google.com/spreadsheets/d/1sq7O054J_6oiP-fkfCP5VCBjlgrjLMT9aXSev1ne6UE/gviz/tq?tqx=out:csv";
 let data = [];
 
-/* ===== CSV 読み込み ===== */
+// kuroshiro初期化
+let kuro;
+async function initKuro() {
+  kuro = new Kuroshiro();
+  await kuro.init(new KuroshiroAnalyzerKuromoji());
+}
+initKuro();
+
+// CSV読み込み
 fetch(CSV_URL)
   .then(res => res.text())
   .then(text => {
     const lines = text.trim().split("\n").slice(1);
     data = lines.map(line => {
-      const cols = line.split(",").map(c => c.replace(/^"|"$/g, ""));
+      const cols = line.split(",").map(c => c.replace(/^"|"$/g,""));
       const [category, question, answer, follow_up] = cols;
       return { category, question, answer, follow_up };
     });
   });
 
 document.getElementById("searchBtn").addEventListener("click", search);
-document.getElementById("input").addEventListener("keypress", e => {
-  if (e.key === "Enter") search();
-});
+document.getElementById("input").addEventListener("keypress", e => { if(e.key==="Enter") search(); });
 
-/* ===== 文字正規化（大文字小文字・全角半角・ひらがな↔カタカナ） ===== */
-function normalizeText(str) {
-  if (!str) return "";
-  str = str.toLowerCase();             // アルファベット大文字小文字無視
-  str = str.normalize("NFKC");         // 全角/半角統一
-  str = str.replace(/[ー－]/g, "ー");   // 長音符統一
-  str = hiraToKana(str);               // ひらがな→カタカナ
-  str = kanaToHira(str);               // カタカナ→ひらがな
-  return str;
+// 全角半角・大文字小文字統一
+function normalizeLatin(str) {
+  return str.toLowerCase().normalize("NFKC").replace(/[ー－]/g,"ー");
 }
 
-/* ===== ひらがな→カタカナ ===== */
-function hiraToKana(str) {
-  return str.replace(/[\u3041-\u3096]/g, ch =>
-    String.fromCharCode(ch.charCodeAt(0) + 0x60)
-  );
+// 文字変換（ひらがな・カタカナ・漢字→ひらがな）
+async function convertToHira(str) {
+  if(!str) return "";
+  // 1) Latin normalization
+  let tmp = normalizeLatin(str);
+  // 2) Kuroshiro でひらがな化
+  try {
+    tmp = await kuro.convert(tmp, { to: "hiragana", mode: "spaced" });
+  } catch (e) {
+    console.warn("変換エラー", e);
+  }
+  // 全スペース削除して戻す
+  return tmp.replace(/\s+/g,"");
 }
 
-/* ===== カタカナ→ひらがな ===== */
-function kanaToHira(str) {
-  return str.replace(/[\u30A1-\u30F6]/g, ch =>
-    String.fromCharCode(ch.charCodeAt(0) - 0x60)
-  );
-}
-
-/* ===== あいまい + AND 検索 ===== */
-function search() {
+async function search() {
   const input = document.getElementById("input").value.trim();
   const list = document.getElementById("list");
+  if(!input) { list.innerHTML=""; return; }
 
-  if (!input) {
-    list.innerHTML = "";
-    return;
-  }
+  // 検索語もひらがな化
+  const normWords = (await convertToHira(input)).split(/\s+/);
 
-  const words = input.split(/\s+/).map(normalizeText); // 検索語も正規化
-
-  const hits = data.filter(d => {
-    const text = normalizeText(
-      d.category + d.question + d.answer + (d.follow_up || "")
-    );
-
-    if (words.length === 1) {
-      return text.includes(words[0]);
+  const hits = [];
+  for(const d of data) {
+    // 全文をひらがな化
+    const text = await convertToHira(d.category + d.question + d.answer + (d.follow_up||""));
+    // AND検索
+    if(normWords.every(w => text.includes(w))) {
+      hits.push(d);
     }
+  }
 
-    return words.every(w => text.includes(w));
-  });
-
-  if (hits.length === 0) {
-    list.innerHTML =
-      "<p>該当するFAQが見つかりませんでした。<br>別のキーワードをお試しください。</p>";
+  if(hits.length===0) {
+    list.innerHTML="<p>該当するFAQが見つかりませんでした。<br>別のキーワードをお試しください。</p>";
     return;
   }
 
-  list.innerHTML = hits.map(d => {
-    return `
-      <div class="card">
-        <div class="q">Q. ${d.question}</div>
-        <div>A. ${d.answer}</div>
-        ${d.follow_up ? `<div class="follow">💡 ${d.follow_up}</div>` : ""}
-      </div>
-    `;
-  }).join("");
+  list.innerHTML = hits.map(d => `
+    <div class="card">
+      <div class="q">Q. ${d.question}</div>
+      <div>A. ${d.answer}</div>
+      ${d.follow_up ? `<div class="follow">💡 ${d.follow_up}</div>` : ""}
+    </div>
+  `).join("");
 }
 </script>
 
