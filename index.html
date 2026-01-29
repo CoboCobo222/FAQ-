@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EPSON FAQ ChatBot（単語部分一致版）</title>
+<title>EPSON FAQ ChatBot（全文＋単語一致版）</title>
 
 <script src="https://unpkg.com/kuroshiro/dist/kuroshiro.min.js"></script>
 <script src="https://unpkg.com/kuroshiro-analyzer-kuromoji/dist/kuroshiro-analyzer-kuromoji.min.js"></script>
@@ -30,10 +30,10 @@ h3 { text-align:center; margin-bottom:12px; }
 </head>
 <body>
 
-<h3>プリンター FAQ ChatBot</h3>
+<h3>プリンタ FAQ ChatBot</h3>
 
 <div id="inputArea">
-  <input id="input" placeholder="調べたい単語をいれてください…">
+  <input id="input" placeholder="質問を入力してください…">
   <button id="sendBtn">送信</button>
 </div>
 
@@ -73,7 +73,6 @@ async function normalize(str){
 // ==== 文章を単語に分解 ====
 async function getWords(str){
   const hira = await normalize(str);
-  // ひらがな・カタカナ・アルファベット・数字の連続を単語として抽出
   return hira.match(/[\u3040-\u309F\u30A0-\u30FFA-Za-z0-9]+/g) || [];
 }
 
@@ -90,15 +89,20 @@ async function search(){
   userDiv.innerHTML=`<div>${question}</div>`;
   chatEl.appendChild(userDiv);
 
-  // --- 入力を単語に分解 ---
+  // --- 入力全文と単語に分解 ---
+  const inputFull = await normalize(question);
   const inputWords = await getWords(question);
 
-  // --- CSVを検索（単語部分一致） ---
+  // --- CSV検索 ---
   const hits = [];
   for(const d of data){
+    const text = await normalize(d.category + d.question + d.answer);
     const textWords = await getWords(d.category + d.question + d.answer);
-    // 入力の単語がCSV内のどの単語にも含まれていればヒット
-    if(inputWords.some(iw => textWords.some(tw => tw.includes(iw)))) hits.push(d);
+
+    // 全文一致または単語部分一致でヒット
+    if(text.includes(inputFull) || inputWords.some(iw => textWords.some(tw => tw.includes(iw)))){
+      hits.push(d);
+    }
   }
 
   // --- Bot吹き出し ---
@@ -140,4 +144,5 @@ document.getElementById("input").addEventListener("keypress", e=>{ if(e.key==="E
 
 </body>
 </html>
+
 
