@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EPSON FAQ ChatBot（候補ボタン版・follow_up非表示）</title>
+<title>EPSON FAQ ChatBot（単語ヒット対応版）</title>
 
 <script src="https://unpkg.com/kuroshiro/dist/kuroshiro.min.js"></script>
 <script src="https://unpkg.com/kuroshiro-analyzer-kuromoji/dist/kuroshiro-analyzer-kuromoji.min.js"></script>
@@ -67,7 +67,7 @@ async function normalize(str){
   let tmp = str.toLowerCase().normalize("NFKC").replace(/[ー－]/g,"ー");
   try { tmp = await kuro.convert(tmp, {to:"hiragana", mode:"normal"}); } 
   catch(e){ console.warn("変換エラー", e); }
-  return tmp;
+  return tmp.replace(/\s+/g,""); // スペース削除
 }
 
 // ==== 検索 & チャット表示 ====
@@ -83,12 +83,14 @@ async function search(){
   userDiv.innerHTML=`<div>${question}</div>`;
   chatEl.appendChild(userDiv);
 
-  // --- 正規化検索 ---
-  const normQuestion = await normalize(question);
+  // --- 正規化して単語に分割 ---
+  const normWords = (await normalize(question)).split(/\s+/);
+
+  // --- CSV を検索（単語ごと部分一致） ---
   const hits = [];
   for(const d of data){
     const text = await normalize(d.category + d.question + d.answer); // follow_up 無視
-    if(text.includes(normQuestion)) hits.push(d);
+    if(normWords.some(w => text.includes(w))) hits.push(d); // どれか1単語でもヒット
   }
 
   // --- Bot吹き出し ---
@@ -130,4 +132,5 @@ document.getElementById("input").addEventListener("keypress", e=>{ if(e.key==="E
 
 </body>
 </html>
+
 
