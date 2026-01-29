@@ -5,22 +5,32 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EPSON プリンター FAQ ChatBot</title>
 
-<!-- kuroshiro と解析器 -->
+<!-- Kuroshiro と解析器 -->
 <script src="https://unpkg.com/kuroshiro/dist/kuroshiro.min.js"></script>
 <script src="https://unpkg.com/kuroshiro-analyzer-kuromoji/dist/kuroshiro-analyzer-kuromoji.min.js"></script>
 
 <style>
-body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin:0; padding:16px; background:#f0f0f0; }
-h3 { text-align:center; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  margin:0;
+  padding:16px;
+  background:#f0f0f0;
+}
+
+h3 {
+  text-align:center;
+  margin-bottom:16px;
+}
 
 #chat {
   max-width: 600px;
-  margin: 16px auto;
+  margin: 0 auto 12px;
   background: #fff;
   border-radius: 12px;
   padding: 12px;
   min-height: 400px;
   overflow-y: auto;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 input, button {
@@ -37,6 +47,7 @@ button {
   background: #007bff;
   color: #fff;
   border: none;
+  cursor: pointer;
 }
 
 .message {
@@ -47,30 +58,39 @@ button {
   word-wrap: break-word;
 }
 
-.user { background: #007bff; color: #fff; margin-left: auto; text-align: right; }
-.bot { background: #f1f1f1; color: #000; margin-right: auto; }
+.user {
+  background: #007bff;
+  color: #fff;
+  margin-left: auto;
+  text-align: right;
+}
 
-.follow { margin-top: 4px; font-size: 14px; color: #555; }
+.bot {
+  background: #f1f1f1;
+  color: #000;
+  margin-right: auto;
+}
+
+.follow {
+  margin-top: 4px;
+  font-size: 14px;
+  color: #555;
+}
 </style>
 </head>
 <body>
 
-<h3>プリンター FAQ ChatBot</h3>
+<h3>EPSON プリンター FAQ ChatBot</h3>
+
 <div id="chat"></div>
 <input id="input" placeholder="質問を入力してください…">
 <button id="sendBtn">送信</button>
 
 <script>
 const CSV_URL = "https://docs.google.com/spreadsheets/d/1sq7O054J_6oiP-fkfCP5VCBjlgrjLMT9aXSev1ne6UE/gviz/tq?tqx=out:csv";
+
 let data = [];
 let kuro;
-
-// Kuroshiro初期化
-async function initKuro() {
-  kuro = new Kuroshiro();
-  await kuro.init(new KuroshiroAnalyzerKuromoji());
-}
-await initKuro();
 
 // 文字列正規化
 function normalizeLatin(str) {
@@ -90,11 +110,17 @@ async function convertToHira(str) {
   }
 }
 
-// CSV読み込み + ひらがな化キャッシュ
-async function loadData() {
+// 初期化関数
+async function init() {
+  // Kuroshiro初期化
+  kuro = new Kuroshiro();
+  await kuro.init(new KuroshiroAnalyzerKuromoji());
+
+  // CSV読み込み + ひらがな化キャッシュ
   const res = await fetch(CSV_URL);
   const text = await res.text();
   const lines = text.trim().split("\n").slice(1);
+
   for(const line of lines){
     const cols = line.split(",").map(c => c.replace(/^"|"$/g,""));
     const [category, question, answer, follow_up] = cols;
@@ -103,45 +129,58 @@ async function loadData() {
     obj.hiraText = await convertToHira(fullText);
     data.push(obj);
   }
+
+  // イベント登録
+  document.getElementById("sendBtn").addEventListener("click", sendMessage);
+  document.getElementById("input").addEventListener("keypress", e => { if(e.key==="Enter") sendMessage(); });
+
+  // 初回ボットメッセージ
+  addBotMessage("こんにちは！プリンターFAQです。質問を入力してください。");
 }
-await loadData();
 
-document.getElementById("sendBtn").addEventListener("click", sendMessage);
-document.getElementById("input").addEventListener("keypress", e => { if(e.key==="Enter") sendMessage(); });
+// ユーザー・ボットメッセージ追加
+function addUserMessage(text){
+  const chatEl = document.getElementById("chat");
+  const div = document.createElement("div");
+  div.className = "message user";
+  div.textContent = text;
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
 
+function addBotMessage(text){
+  const chatEl = document.getElementById("chat");
+  const div = document.createElement("div");
+  div.className = "message bot";
+  div.textContent = text;
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+// 検索関数
 async function sendMessage() {
   const inputEl = document.getElementById("input");
-  const chatEl = document.getElementById("chat");
   const text = inputEl.value.trim();
   if(!text) return;
 
-  // ユーザーメッセージ表示
-  const userMsg = document.createElement("div");
-  userMsg.className = "message user";
-  userMsg.textContent = text;
-  chatEl.appendChild(userMsg);
-
+  addUserMessage(text);
   inputEl.value = "";
 
-  // 検索
   const words = (await convertToHira(text)).split(/\s+/);
   const hits = data.filter(d => words.every(w => d.hiraText.includes(w)));
 
   let botText;
-  if(hits.length===0){
+  if(hits.length === 0){
     botText = "該当するFAQが見つかりませんでした。別のキーワードをお試しください。";
   } else {
     botText = hits.map(d => `Q. ${d.question}\nA. ${d.answer}${d.follow_up ? "\n💡 " + d.follow_up : ""}`).join("\n\n");
   }
 
-  const botMsg = document.createElement("div");
-  botMsg.className = "message bot";
-  botMsg.textContent = botText;
-  chatEl.appendChild(botMsg);
-
-  // 自動スクロール
-  chatEl.scrollTop = chatEl.scrollHeight;
+  addBotMessage(botText);
 }
+
+// 初期化実行
+init();
 </script>
 
 </body>
