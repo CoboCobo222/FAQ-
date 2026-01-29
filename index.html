@@ -10,78 +10,20 @@
 <script src="https://unpkg.com/kuroshiro-analyzer-kuromoji/dist/kuroshiro-analyzer-kuromoji.min.js"></script>
 
 <style>
-body {
-  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-  margin:0;
-  padding:16px;
-  background:#f0f0f0;
-}
-
-h3 {
-  text-align:center;
-  margin-bottom:16px;
-}
-
-#chat {
-  max-width: 600px;
-  margin: 0 auto 12px;
-  background: #fff;
-  border-radius: 12px;
-  padding: 12px;
-  min-height: 400px;
-  overflow-y: auto;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-input, button {
-  width: calc(100% - 24px);
-  padding: 12px;
-  font-size: 16px;
-  margin: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  box-sizing: border-box;
-}
-
-button {
-  background: #007bff;
-  color: #fff;
-  border: none;
-  cursor: pointer;
-}
-
-.message {
-  margin: 8px 0;
-  padding: 10px 14px;
-  border-radius: 16px;
-  max-width: 80%;
-  word-wrap: break-word;
-}
-
-.user {
-  background: #007bff;
-  color: #fff;
-  margin-left: auto;
-  text-align: right;
-}
-
-.bot {
-  background: #f1f1f1;
-  color: #000;
-  margin-right: auto;
-}
-
-.follow {
-  margin-top: 4px;
-  font-size: 14px;
-  color: #555;
-}
+body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin:0; padding:16px; background:#f0f0f0; }
+h3 { text-align:center; margin-bottom:16px; }
+#chat { max-width:600px; margin:0 auto 12px; background:#fff; border-radius:12px; padding:12px; min-height:400px; overflow-y:auto; box-shadow:0 2px 8px rgba(0,0,0,0.1);}
+input, button { width:calc(100% - 24px); padding:12px; font-size:16px; margin:6px 12px; border-radius:8px; border:1px solid #ccc; box-sizing:border-box;}
+button { background:#007bff; color:#fff; border:none; cursor:pointer; }
+.message { margin:8px 0; padding:10px 14px; border-radius:16px; max-width:80%; word-wrap:break-word;}
+.user { background:#007bff; color:#fff; margin-left:auto; text-align:right;}
+.bot { background:#f1f1f1; color:#000; margin-right:auto;}
+.follow { margin-top:4px; font-size:14px; color:#555;}
 </style>
 </head>
 <body>
 
 <h3>EPSON プリンター FAQ ChatBot</h3>
-
 <div id="chat"></div>
 <input id="input" placeholder="質問を入力してください…">
 <button id="sendBtn">送信</button>
@@ -110,35 +52,7 @@ async function convertToHira(str) {
   }
 }
 
-// 初期化関数
-async function init() {
-  // Kuroshiro初期化
-  kuro = new Kuroshiro();
-  await kuro.init(new KuroshiroAnalyzerKuromoji());
-
-  // CSV読み込み + ひらがな化キャッシュ
-  const res = await fetch(CSV_URL);
-  const text = await res.text();
-  const lines = text.trim().split("\n").slice(1);
-
-  for(const line of lines){
-    const cols = line.split(",").map(c => c.replace(/^"|"$/g,""));
-    const [category, question, answer, follow_up] = cols;
-    const obj = { category, question, answer, follow_up };
-    const fullText = category + question + answer + (follow_up||"");
-    obj.hiraText = await convertToHira(fullText);
-    data.push(obj);
-  }
-
-  // イベント登録
-  document.getElementById("sendBtn").addEventListener("click", sendMessage);
-  document.getElementById("input").addEventListener("keypress", e => { if(e.key==="Enter") sendMessage(); });
-
-  // 初回ボットメッセージ
-  addBotMessage("こんにちは！プリンターFAQです。質問を入力してください。");
-}
-
-// ユーザー・ボットメッセージ追加
+// チャットにメッセージ追加
 function addUserMessage(text){
   const chatEl = document.getElementById("chat");
   const div = document.createElement("div");
@@ -157,7 +71,7 @@ function addBotMessage(text){
   chatEl.scrollTop = chatEl.scrollHeight;
 }
 
-// 検索関数
+// 検索処理
 async function sendMessage() {
   const inputEl = document.getElementById("input");
   const text = inputEl.value.trim();
@@ -179,10 +93,37 @@ async function sendMessage() {
   addBotMessage(botText);
 }
 
-// 初期化実行
-init();
+// 初期化関数
+async function init() {
+  // Kuroshiro初期化
+  kuro = new Kuroshiro();
+  await kuro.init(new KuroshiroAnalyzerKuromoji());
+
+  // CSV読み込み + ひらがな化
+  const res = await fetch(CSV_URL);
+  const text = await res.text();
+  const lines = text.trim().split("\n").slice(1);
+
+  for(const line of lines){
+    const cols = line.split(",").map(c => c.replace(/^"|"$/g,""));
+    const [category, question, answer, follow_up] = cols;
+    const obj = { category, question, answer, follow_up };
+    const fullText = category + question + answer + (follow_up||"");
+    obj.hiraText = await convertToHira(fullText);
+    data.push(obj);
+  }
+
+  // イベント登録（初期化完了後）
+  document.getElementById("sendBtn").addEventListener("click", sendMessage);
+  document.getElementById("input").addEventListener("keypress", e => { if(e.key==="Enter") sendMessage(); });
+
+  // 初回ボットメッセージ
+  addBotMessage("こんにちは！プリンターFAQです。質問を入力してください。");
+}
+
+// ページ読み込み時に初期化
+window.addEventListener("DOMContentLoaded", init);
 </script>
 
 </body>
 </html>
-
