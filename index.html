@@ -2,108 +2,192 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EPSON プリンター FAQ</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EPSON プリンター FAQ ChatBot</title>
 
-<!-- kuroshiro と解析器 -->
+<!-- Kuroshiro -->
 <script src="https://unpkg.com/kuroshiro/dist/kuroshiro.min.js"></script>
 <script src="https://unpkg.com/kuroshiro-analyzer-kuromoji/dist/kuroshiro-analyzer-kuromoji.min.js"></script>
 
 <style>
-body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin:0; padding:16px; background:#fff; }
-h3 { margin-bottom:12px; }
-input { width:100%; padding:14px; font-size:16px; border-radius:8px; border:1px solid #ccc; box-sizing:border-box; }
-button { width:100%; margin-top:10px; padding:14px; font-size:16px; border:none; border-radius:8px; background:#007bff; color:#fff; }
-.card { background:#f7f7f7; padding:12px; border-radius:8px; margin-top:12px; }
-.q { font-weight:bold; margin-bottom:6px; }
-.follow { margin-top:8px; font-size:14px; color:#555; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  margin: 0;
+  padding: 16px;
+  background: #fff;
+}
+
+h3 {
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+#chat {
+  height: 70vh;
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: #f7f7f7;
+}
+
+input {
+  width: calc(100% - 110px);
+  padding: 12px;
+  font-size: 16px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+  margin-right: 8px;
+}
+
+button {
+  width: 100px;
+  padding: 12px;
+  font-size: 16px;
+  border: none;
+  border-radius: 8px;
+  background: #007bff;
+  color: #fff;
+}
+
+.user-msg {
+  text-align: right;
+  margin: 8px 0;
+}
+
+.user-msg div {
+  display: inline-block;
+  background: #007bff;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 12px;
+}
+
+.bot-msg {
+  text-align: left;
+  margin: 8px 0;
+}
+
+.bot-msg div {
+  display: inline-block;
+  background: #eee;
+  color: #000;
+  padding: 8px 12px;
+  border-radius: 12px;
+  margin-bottom: 6px;
+}
+
+.bot-msg .follow {
+  font-size: 12px;
+  color: #555;
+  margin-top: 4px;
+}
 </style>
 </head>
 <body>
 
-<h3>プリンター FAQ</h3>
-<input id="input" placeholder="例：Wi-Fi / スマホ 印刷 / 印刷 できない">
-<button id="searchBtn">検索</button>
-<div id="list"></div>
+<h3>EPSON プリンター FAQ ChatBot</h3>
+
+<div id="chat"></div>
+
+<div style="display:flex; margin-top:10px;">
+  <input id="input" placeholder="質問を入力してください…">
+  <button id="sendBtn">送信</button>
+</div>
 
 <script>
 const CSV_URL = "https://docs.google.com/spreadsheets/d/1sq7O054J_6oiP-fkfCP5VCBjlgrjLMT9aXSev1ne6UE/gviz/tq?tqx=out:csv";
-let data = [];
 
-// kuroshiro初期化
+let data = [];
 let kuro;
+
+// ==== Kuroshiro 初期化 ====
 async function initKuro() {
   kuro = new Kuroshiro();
   await kuro.init(new KuroshiroAnalyzerKuromoji());
 }
 initKuro();
 
-// CSV読み込み
+// ==== CSV 読み込み ====
 fetch(CSV_URL)
   .then(res => res.text())
   .then(text => {
     const lines = text.trim().split("\n").slice(1);
     data = lines.map(line => {
-      const cols = line.split(",").map(c => c.replace(/^"|"$/g,""));
+      const cols = line.split(",").map(c => c.replace(/^"|"$/g, ""));
       const [category, question, answer, follow_up] = cols;
       return { category, question, answer, follow_up };
     });
   });
 
-document.getElementById("searchBtn").addEventListener("click", search);
-document.getElementById("input").addEventListener("keypress", e => { if(e.key==="Enter") search(); });
-
-// 全角半角・大文字小文字統一
+// ==== 文字正規化 ====
 function normalizeLatin(str) {
   return str.toLowerCase().normalize("NFKC").replace(/[ー－]/g,"ー");
 }
 
-// 文字変換（ひらがな・カタカナ・漢字→ひらがな）
-async function convertToHira(str) {
+async function convertToHira(str){
   if(!str) return "";
-  // 1) Latin normalization
   let tmp = normalizeLatin(str);
-  // 2) Kuroshiro でひらがな化
-  try {
-    tmp = await kuro.convert(tmp, { to: "hiragana", mode: "spaced" });
-  } catch (e) {
+  try{
+    tmp = await kuro.convert(tmp, { to:"hiragana", mode:"spaced" });
+  } catch(e){
     console.warn("変換エラー", e);
   }
-  // 全スペース削除して戻す
   return tmp.replace(/\s+/g,"");
 }
 
-async function search() {
-  const input = document.getElementById("input").value.trim();
-  const list = document.getElementById("list");
-  if(!input) { list.innerHTML=""; return; }
+// ==== 検索 & チャット表示 ====
+async function search(){
+  const inputEl = document.getElementById("input");
+  const chatEl = document.getElementById("chat");
+  const question = inputEl.value.trim();
+  if(!question) return;
 
-  // 検索語もひらがな化
-  const normWords = (await convertToHira(input)).split(/\s+/);
+  // --- ユーザー吹き出し ---
+  const userDiv = document.createElement("div");
+  userDiv.className = "user-msg";
+  userDiv.innerHTML = `<div>${question}</div>`;
+  chatEl.appendChild(userDiv);
 
+  // --- 検索 ---
+  const normWords = (await convertToHira(question)).split(/\s+/);
   const hits = [];
-  for(const d of data) {
-    // 全文をひらがな化
+  for(const d of data){
     const text = await convertToHira(d.category + d.question + d.answer + (d.follow_up||""));
-    // AND検索
-    if(normWords.every(w => text.includes(w))) {
-      hits.push(d);
-    }
+    if(normWords.every(w => text.includes(w))) hits.push(d);
   }
 
-  if(hits.length===0) {
-    list.innerHTML="<p>該当するFAQが見つかりませんでした。<br>別のキーワードをお試しください。</p>";
-    return;
+  // --- Bot吹き出し ---
+  const botDiv = document.createElement("div");
+  botDiv.className = "bot-msg";
+
+  if(hits.length === 0){
+    botDiv.innerHTML = `<div>該当するFAQが見つかりませんでした。別のキーワードを試してください。</div>`;
+  } else {
+    botDiv.innerHTML = hits.map(d => `
+      <div>
+        <strong>Q:</strong> ${d.question}<br>
+        <strong>A:</strong> ${d.answer}
+        ${d.follow_up ? `<div class="follow">💡 ${d.follow_up}</div>` : ""}
+      </div>
+    `).join("");
   }
 
-  list.innerHTML = hits.map(d => `
-    <div class="card">
-      <div class="q">Q. ${d.question}</div>
-      <div>A. ${d.answer}</div>
-      ${d.follow_up ? `<div class="follow">💡 ${d.follow_up}</div>` : ""}
-    </div>
-  `).join("");
+  chatEl.appendChild(botDiv);
+
+  // --- 自動スクロール ---
+  chatEl.scrollTop = chatEl.scrollHeight;
+
+  // 入力欄クリア
+  inputEl.value = "";
 }
+
+// ==== イベント ====
+document.getElementById("sendBtn").addEventListener("click", search);
+document.getElementById("input").addEventListener("keypress", e=>{
+  if(e.key==="Enter") search();
+});
 </script>
 
 </body>
