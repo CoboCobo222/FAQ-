@@ -72,11 +72,8 @@ fetch(CSV_URL)
   .then(res => res.text())
   .then(text => {
     const lines = text.trim().split("\n").slice(1);
-
     data = lines.map(line => {
-      const cols = line.split(",").map(c =>
-        c.replace(/^"|"$/g, "")
-      );
+      const cols = line.split(",").map(c => c.replace(/^"|"$/g, ""));
       const [category, question, answer, follow_up] = cols;
       return { category, question, answer, follow_up };
     });
@@ -87,24 +84,32 @@ document.getElementById("input").addEventListener("keypress", e => {
   if (e.key === "Enter") search();
 });
 
-/* ===== テキスト正規化関数 ===== */
+/* ===== 文字正規化（大文字小文字・全角半角・ひらがな↔カタカナ） ===== */
 function normalizeText(str) {
   if (!str) return "";
-  str = str.toLowerCase();       // アルファベット大文字小文字無視
-  str = str.normalize("NFKC");   // 全角半角統一
-  str = str.replace(/[ー－]/g, "ー"); // 長音符統一
-  str = hiraToKana(str);         // ひらがな→カタカナ変換
+  str = str.toLowerCase();             // アルファベット大文字小文字無視
+  str = str.normalize("NFKC");         // 全角/半角統一
+  str = str.replace(/[ー－]/g, "ー");   // 長音符統一
+  str = hiraToKana(str);               // ひらがな→カタカナ
+  str = kanaToHira(str);               // カタカナ→ひらがな
   return str;
 }
 
-/* ===== ひらがな→カタカナ変換 ===== */
+/* ===== ひらがな→カタカナ ===== */
 function hiraToKana(str) {
   return str.replace(/[\u3041-\u3096]/g, ch =>
     String.fromCharCode(ch.charCodeAt(0) + 0x60)
   );
 }
 
-/* ===== あいまい + AND + 簡単検索 ===== */
+/* ===== カタカナ→ひらがな ===== */
+function kanaToHira(str) {
+  return str.replace(/[\u30A1-\u30F6]/g, ch =>
+    String.fromCharCode(ch.charCodeAt(0) - 0x60)
+  );
+}
+
+/* ===== あいまい + AND 検索 ===== */
 function search() {
   const input = document.getElementById("input").value.trim();
   const list = document.getElementById("list");
@@ -134,28 +139,18 @@ function search() {
     return;
   }
 
-  list.innerHTML = hits.map(d => `
-    <div class="card">
-      <div class="q">Q. ${d.question}</div>
-      <div>A. ${d.answer}</div>
-      ${d.follow_up ? `<div class="follow">💡 ${d.follow_up}</div>` : ""}
-    </div>
-  `).join("");
+  list.innerHTML = hits.map(d => {
+    return `
+      <div class="card">
+        <div class="q">Q. ${d.question}</div>
+        <div>A. ${d.answer}</div>
+        ${d.follow_up ? `<div class="follow">💡 ${d.follow_up}</div>` : ""}
+      </div>
+    `;
+  }).join("");
 }
 </script>
 
 </body>
 </html>
 
-  list.innerHTML = hits.map(d => `
-    <div class="card">
-      <div class="q">Q. ${d.question}</div>
-      <div>A. ${d.answer}</div>
-      ${d.follow_up ? `<div class="follow">💡 ${d.follow_up}</div>` : ""}
-    </div>
-  `).join("");
-}
-</script>
-
-</body>
-</html>
