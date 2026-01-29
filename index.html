@@ -4,23 +4,43 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EPSON FAQ</title>
+
 <style>
-body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; padding: 16px; }
-input { width: 100%; padding: 14px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; }
-button {
+body {
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  margin: 0;
+  padding: 16px;
+}
+
+input, button {
   width: 100%;
-  margin-top: 10px;
   padding: 14px;
   font-size: 16px;
-  border: none;
   border-radius: 8px;
-  background: #007aff;
-  color: #fff;
+  border: 1px solid #ccc;
+  margin-top: 8px;
 }
-.card { background: #f7f7f7; padding: 12px; border-radius: 8px; margin-top: 12px; }
-.q { font-weight: bold; margin-bottom: 4px; }
+
+button {
+  background: #007aff;
+  color: white;
+  border: none;
+}
+
+.card {
+  background: #f7f7f7;
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 12px;
+}
+
+.q {
+  font-weight: bold;
+  margin-bottom: 6px;
+}
 </style>
 </head>
+
 <body>
 
 <h3>EPSON プリンター FAQ</h3>
@@ -31,7 +51,8 @@ button {
 <div id="list"></div>
 
 <script>
-const CSV_URL = "https://docs.google.com/spreadsheets/d/1sq7O054J_6oiP-fkfCP5VCBjlgrjLMT9aXSev1ne6UE/gviz/tq?tqx=out:csv";
+const CSV_URL =
+ "https://docs.google.com/spreadsheets/d/1sq7O054J_6oiP-fkfCP5VCBjlgrjLMT9aXSev1ne6UE/gviz/tq?tqx=out:csv";
 
 let data = [];
 
@@ -39,45 +60,39 @@ let data = [];
 fetch(CSV_URL)
   .then(res => res.text())
   .then(text => {
-    const rows = text.split("\n").slice(1);
-    data = rows.map(row => {
-      const cols = row.match(/(".*?"|[^",]+)(?=,|$)/g);
-      if (!cols || cols.length < 2) return null;
-      return {
-        q: cols[0].replace(/^"|"$/g, ""),
-        a: cols[1].replace(/^"|"$/g, "")
-      };
-    }).filter(Boolean);
+    data = text
+      .trim()
+      .split("\n")
+      .slice(1)
+      .map(r => {
+        const [question, answer, follow_up] = r.split("\t");
+        return { question, answer, follow_up };
+      });
   });
 
 // 検索処理
-function searchFAQ() {
+document.getElementById("searchBtn").addEventListener("click", () => {
   const word = document.getElementById("input").value.trim();
+  const list = document.getElementById("list");
+
   if (!word) {
-    document.getElementById("list").innerHTML = "";
+    list.innerHTML = "";
     return;
   }
 
-  const hits = data.filter(d => d.q.includes(word));
-  document.getElementById("list").innerHTML =
-    hits.length
-      ? hits.map(d => `
-          <div class="card">
-            <div class="q">Q. ${d.q}</div>
-            <div>A. ${d.a}</div>
-          </div>
-        `).join("")
-      : `<div class="card">該当するFAQが見つかりませんでした。</div>`;
-}
+  const hits = data.filter(d =>
+    d.question && d.question.includes(word)
+  );
 
-// ボタン押下
-document.getElementById("searchBtn").addEventListener("click", searchFAQ);
-
-// Enterキー対応
-document.getElementById("input").addEventListener("keydown", e => {
-  if (e.key === "Enter") {
-    searchFAQ();
-  }
+  list.innerHTML = hits.length
+    ? hits.map(d => `
+      <div class="card">
+        <div class="q">Q. ${d.question}</div>
+        <div>A. ${d.answer}</div>
+        ${d.follow_up ? `<div style="margin-top:8px;color:#555;">💡 ${d.follow_up}</div>` : ""}
+      </div>
+    `).join("")
+    : "<p>該当するFAQが見つかりませんでした。</p>";
 });
 </script>
 
