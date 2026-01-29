@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EPSON FAQ ChatBot（候補ボタン版）</title>
+<title>EPSON FAQ ChatBot（候補ボタン版・follow_up非表示）</title>
 
 <script src="https://unpkg.com/kuroshiro/dist/kuroshiro.min.js"></script>
 <script src="https://unpkg.com/kuroshiro-analyzer-kuromoji/dist/kuroshiro-analyzer-kuromoji.min.js"></script>
@@ -23,7 +23,6 @@ h3 { text-align:center; margin-bottom:12px; }
 
 .bot-msg { text-align:left; margin:8px 0; }
 .bot-msg div { display:inline-block; background:#eee; color:#000; padding:8px 12px; border-radius:12px; margin-bottom:6px; }
-.bot-msg .follow { font-size:12px; color:#555; margin-top:4px; }
 
 .button-option { margin:4px 0; padding:6px 10px; border:none; border-radius:6px; background:#d0d0d0; cursor:pointer; }
 .button-option:hover { background:#bbb; }
@@ -45,9 +44,11 @@ const CSV_URL = "https://docs.google.com/spreadsheets/d/1sq7O054J_6oiP-fkfCP5VCB
 let data = [];
 let kuro;
 
+// ==== Kuroshiro 初期化 ====
 async function initKuro() { kuro = new Kuroshiro(); await kuro.init(new KuroshiroAnalyzerKuromoji()); }
 initKuro();
 
+// ==== CSV 読み込み ====
 fetch(CSV_URL).then(r=>r.text()).then(text=>{
   const lines=text.trim().split("\n").slice(1);
   data = lines.map(line=>{
@@ -67,6 +68,7 @@ async function convertToHira(str){
   return tmp.replace(/\s+/g,"");
 }
 
+// ==== 検索 & チャット表示 ====
 async function search(){
   const inputEl = document.getElementById("input");
   const chatEl = document.getElementById("chat");
@@ -83,7 +85,7 @@ async function search(){
   const normWords = (await convertToHira(question)).split(/\s+/);
   const hits = [];
   for(const d of data){
-    const text = await convertToHira(d.category + d.question + d.answer + (d.follow_up||""));
+    const text = await convertToHira(d.category + d.question + d.answer); // follow_up 無視
     if(normWords.every(w=>text.includes(w))) hits.push(d);
   }
 
@@ -100,9 +102,14 @@ async function search(){
       btn.className="button-option";
       btn.textContent=d.question;
       btn.addEventListener("click",()=>{
-        const answerDiv=document.createElement("div");
-        answerDiv.className="bot-msg";
-        answerDiv.innerHTML=`<div><strong>Q:</strong> ${d.question}<br><strong>A:</strong> ${d.answer}${d.follow_up?`<div class='follow'>💡 ${d.follow_up}</div>`:""}</div>`;
+        const answerDiv = document.createElement("div");
+        answerDiv.className = "bot-msg";
+        answerDiv.innerHTML = `
+          <div>
+            <strong>Q:</strong> ${d.question}<br>
+            <strong>A:</strong> ${d.answer}
+          </div>
+        `;
         chatEl.appendChild(answerDiv);
         chatEl.scrollTop = chatEl.scrollHeight;
       });
