@@ -7,6 +7,16 @@
 <style>
 body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; padding: 16px; }
 input { width: 100%; padding: 14px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; }
+button {
+  width: 100%;
+  margin-top: 10px;
+  padding: 14px;
+  font-size: 16px;
+  border: none;
+  border-radius: 8px;
+  background: #007aff;
+  color: #fff;
+}
 .card { background: #f7f7f7; padding: 12px; border-radius: 8px; margin-top: 12px; }
 .q { font-weight: bold; margin-bottom: 4px; }
 </style>
@@ -14,7 +24,9 @@ input { width: 100%; padding: 14px; font-size: 16px; border-radius: 8px; border:
 <body>
 
 <h3>EPSON プリンター FAQ</h3>
+
 <input id="input" placeholder="例：印刷できない" />
+<button id="searchBtn">検索</button>
 
 <div id="list"></div>
 
@@ -23,7 +35,7 @@ const CSV_URL = "https://docs.google.com/spreadsheets/d/1sq7O054J_6oiP-fkfCP5VCB
 
 let data = [];
 
-// CSVをちゃんとパースする
+// CSV読み込み
 fetch(CSV_URL)
   .then(res => res.text())
   .then(text => {
@@ -38,9 +50,9 @@ fetch(CSV_URL)
     }).filter(Boolean);
   });
 
-// 検索
-document.getElementById("input").addEventListener("input", e => {
-  const word = e.target.value.trim();
+// 検索処理
+function searchFAQ() {
+  const word = document.getElementById("input").value.trim();
   if (!word) {
     document.getElementById("list").innerHTML = "";
     return;
@@ -48,14 +60,27 @@ document.getElementById("input").addEventListener("input", e => {
 
   const hits = data.filter(d => d.q.includes(word));
   document.getElementById("list").innerHTML =
-    hits.map(d => `
-      <div class="card">
-        <div class="q">Q. ${d.q}</div>
-        <div>A. ${d.a}</div>
-      </div>
-    `).join("");
+    hits.length
+      ? hits.map(d => `
+          <div class="card">
+            <div class="q">Q. ${d.q}</div>
+            <div>A. ${d.a}</div>
+          </div>
+        `).join("")
+      : `<div class="card">該当するFAQが見つかりませんでした。</div>`;
+}
+
+// ボタン押下
+document.getElementById("searchBtn").addEventListener("click", searchFAQ);
+
+// Enterキー対応
+document.getElementById("input").addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    searchFAQ();
+  }
 });
 </script>
 
 </body>
 </html>
+
