@@ -3,10 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EPSON FAQ ChatBot（候補ボタン版・follow_up非表示）</title>
-
-<script src="https://unpkg.com/kuroshiro/dist/kuroshiro.min.js"></script>
-<script src="https://unpkg.com/kuroshiro-analyzer-kuromoji/dist/kuroshiro-analyzer-kuromoji.min.js"></script>
+<title>ルールベース自由会話Bot</title>
 
 <style>
 body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin:0; padding:16px; background:#fff; }
@@ -30,7 +27,7 @@ h3 { text-align:center; margin-bottom:12px; }
 </head>
 <body>
 
-<h3>プリンター FAQ ChatBot</h3>
+<h3>ルールベース自由会話Bot</h3>
 
 <div id="inputArea">
   <input id="input" placeholder="質問を入力してください…">
@@ -42,91 +39,90 @@ h3 { text-align:center; margin-bottom:12px; }
 <script>
 const CSV_URL = "https://docs.google.com/spreadsheets/d/1sq7O054J_6oiP-fkfCP5VCBjlgrjLMT9aXSev1ne6UE/gviz/tq?tqx=out:csv";
 let data = [];
-let kuro;
 
-// ==== Kuroshiro 初期化 ====
-async function initKuro() { kuro = new Kuroshiro(); await kuro.init(new KuroshiroAnalyzerKuromoji()); }
-initKuro();
-
-// ==== CSV 読み込み ====
+// CSV読み込み
 fetch(CSV_URL).then(r=>r.text()).then(text=>{
   const lines=text.trim().split("\n").slice(1);
   data = lines.map(line=>{
     const cols=line.split(",").map(c=>c.replace(/^"|"$/g,""));
-    const [category, question, answer, follow_up] = cols;
-    return { category, question, answer, follow_up };
+    const [category, question, answer] = cols;
+    return { category, question, answer };
   });
 });
 
-function normalizeLatin(str){ return str.toLowerCase().normalize("NFKC").replace(/[ー－]/g,"ー"); }
+// 簡易文字正規化
+function normalize(str){ return str.toLowerCase().normalize("NFKC"); }
 
-async function convertToHira(str){
-  if(!str) return "";
-  let tmp = normalizeLatin(str);
-  try{ tmp = await kuro.convert(tmp,{to:"hiragana", mode:"spaced"}); }
-  catch(e){ console.warn("変換エラー", e); }
-  return tmp.replace(/\s+/g,"");
+// 簡易類似度スコア（文字列一致率）
+function similarity(a,b){
+  a = normalize(a); b = normalize(b);
+  let match=0;
+  for(let i=0;i<a.length;i++){
+    if(b.includes(a[i])) match++;
+  }
+  return match / Math.max(a.length,b.length);
 }
 
-// ==== 検索 & チャット表示 ====
-async function search(){
-  const inputEl = document.getElementById("input");
+// 検索関数（類似度上位3件まで）
+function searchFAQ(input){
+  const scores = data.map(d=>({d, score:similarity(input,d.question)}));
+  scores.sort((a,b)=>b.score-a.score);
+  const top = scores.filter(s=>s.score>0).slice(0,3).map(s=>s.d);
+  return top;
+}
+
+// チャット表示
+function addChat(userText, botHTML){
   const chatEl = document.getElementById("chat");
-  const question = inputEl.value.trim();
-  if(!question) return;
-
-  // --- ユーザー吹き出し ---
-  const userDiv = document.createElement("div");
-  userDiv.className="user-msg";
-  userDiv.innerHTML=`<div>${question}</div>`;
-  chatEl.appendChild(userDiv);
-
-  // --- 検索 ---
-  const normWords = (await convertToHira(question)).split(/\s+/);
-  const hits = [];
-  for(const d of data){
-    const text = await convertToHira(d.category + d.question + d.answer); // follow_up 無視
-    if(normWords.every(w=>text.includes(w))) hits.push(d);
+  if(userText){
+    const userDiv = document.createElement("div");
+    userDiv.className="user-msg";
+    userDiv.innerHTML=`<div>${userText}</div>`;
+    chatEl.appendChild(userDiv);
   }
-
-  // --- Bot吹き出し ---
-  const botDiv = document.createElement("div");
-  botDiv.className="bot-msg";
-
-  if(hits.length===0){
-    botDiv.innerHTML=`<div>該当するFAQが見つかりませんでした。別のキーワードを試してください。</div>`;
-  } else {
-    botDiv.innerHTML="<div>候補を選んでください:</div>";
-    hits.forEach((d,index)=>{
-      const btn = document.createElement("button");
-      btn.className="button-option";
-      btn.textContent=d.question;
-      btn.addEventListener("click",()=>{
-        const answerDiv = document.createElement("div");
-        answerDiv.className = "bot-msg";
-        answerDiv.innerHTML = `
-          <div>
-            <strong>Q:</strong> ${d.question}<br>
-            <strong>A:</strong> ${d.answer}
-          </div>
-        `;
-        chatEl.appendChild(answerDiv);
-        chatEl.scrollTop = chatEl.scrollHeight;
-      });
-      botDiv.appendChild(btn);
-    });
+  if(botHTML){
+    const botDiv = document.createElement("div");
+    botDiv.className="bot-msg";
+    botDiv.innerHTML = botHTML;
+    chatEl.appendChild(botDiv);
   }
-
-  chatEl.appendChild(botDiv);
   chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+// メイン処理
+function handleInput(){
+  const inputEl = document.getElementById("input");
+  const text = inputEl.value.trim();
+  if(!text) return;
+
+  addChat(text,null);
+
+  const hits = searchFAQ(text);
+  if(hits.length===0){
+    addChat(null,"<div>すみません、よくわかりません。キーワードを変えてみてください。</div>");
+  } else {
+    let html = "<div>候補を選んでください:</div>";
+    hits.forEach(d=>{
+      html += `<button class="button-option">${d.question}</button>`;
+    });
+    addChat(null, html);
+
+    // ボタン押下で回答表示
+    setTimeout(()=>{ // 少し遅延させてボタンにイベント付与
+      document.querySelectorAll(".button-option").forEach((btn,i)=>{
+        btn.onclick=()=>{
+          addChat(null,`<div><strong>Q:</strong> ${hits[i].question}<br><strong>A:</strong> ${hits[i].answer}</div>`);
+        };
+      });
+    },100);
+  }
+
   inputEl.value="";
 }
 
-document.getElementById("sendBtn").addEventListener("click", search);
-document.getElementById("input").addEventListener("keypress", e=>{ if(e.key==="Enter") search(); });
+document.getElementById("sendBtn").addEventListener("click",handleInput);
+document.getElementById("input").addEventListener("keypress", e=>{if(e.key==="Enter") handleInput();});
 
 </script>
-
 </body>
 </html>
-
